@@ -1,9 +1,14 @@
-# readouttesting (the RBU) built from the local checkout.
+# The RBU, built from the local rbu checkout.
 #
-# The repo's own Dockerfile git-clones readouttesting from the private
-# GitLab, which needs credentials inside the build. This one copies the
-# working tree instead, so it builds whatever is checked out — including
-# uncommitted changes — and needs no registry auth.
+# This used to build readouttesting. rbu supersedes it: it carries the same
+# receive tools plus the aggregation, buffering and writing stages, so the
+# decoded data has somewhere to go instead of piling up in the aggregation
+# buffer. readouttesting stays useful only as a link test.
+#
+# The repo's own Dockerfile git-clones from the private GitLab, which needs
+# credentials inside the build. This one copies the working tree instead, so
+# it builds whatever is checked out - including uncommitted changes - and
+# needs no registry auth.
 #
 # Build from the parent of the repos:
 #   docker build -f mpmt-sim/docker/Dockerfile.rbu -t rbu:local .
@@ -13,14 +18,18 @@ FROM tooldaq/core
 RUN cd /opt/ToolFrameworkCore && git pull && make clean && make -j$(nproc) && \
     cd /opt/ToolDAQFramework && git pull && make clean && make -j$(nproc)
 
-COPY readouttesting /opt/readouttesting
+COPY rbu /opt/rbu
 
-RUN cd /opt/readouttesting && \
+# The working tree carries a build made against the host's libraries, and a
+# Dependencies symlink pointing at the host paths. Both are wrong in here.
+RUN cd /opt/rbu && \
+    rm -rf Dependencies include/*.h lib/*.so && \
+    find . -name '*.o' -delete && \
     ln -sf /opt ./Dependencies && \
     chmod a+x ./Setup.sh && \
     . ./Setup.sh && \
     make -j$(nproc)
 
-WORKDIR /opt/readouttesting
+WORKDIR /opt/rbu
 
 CMD ["/bin/bash"]

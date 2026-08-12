@@ -1,0 +1,31 @@
+# readouttesting, built from the local checkout.
+#
+# The repo's own Dockerfile git-clones from the private GitLab, which needs
+# credentials inside the build. This one copies the working tree instead, so
+# it builds whatever is checked out - including uncommitted changes - and
+# needs no registry auth.
+#
+# See Dockerfile.rbu for the newer repo, which carries the full aggregation
+# and writing chain rather than the slice writer bolted on here.
+#
+# Build from the parent of the repos:
+#   docker build -f mpmt-sim/docker/Dockerfile.readouttesting -t readouttesting:local .
+
+FROM tooldaq/core
+
+RUN cd /opt/ToolFrameworkCore && git pull && make clean && make -j$(nproc) && \
+    cd /opt/ToolDAQFramework && git pull && make clean && make -j$(nproc)
+
+COPY readouttesting /opt/readouttesting
+
+RUN cd /opt/readouttesting && \
+    rm -rf Dependencies && \
+    find . -name '*.o' -delete && \
+    ln -sf /opt ./Dependencies && \
+    chmod a+x ./Setup.sh && \
+    . ./Setup.sh && \
+    make -j$(nproc)
+
+WORKDIR /opt/readouttesting
+
+CMD ["/bin/bash"]

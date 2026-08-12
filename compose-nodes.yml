@@ -1,0 +1,100 @@
+# Several simulated mPMT nodes at once, one set of containers each.
+#
+# Why a bridge and not the host network
+# -------------------------------------
+# The RBU keys its connections by ip:port. On the host network every simulated
+# node shares one IP, so two nodes binding the same data_port silently collapse
+# into a single connection and only one of them is ever read. On a bridge each
+# node gets its own IP and they can all keep port 8888.
+#
+# The catch is multicast. ToolDAQ's ServiceDiscovery joins with INADDR_ANY
+# (ServiceDiscovery.cpp, "mreq.imr_interface.s_addr = htonl(INADDR_ANY)") and
+# offers no way to pick the interface, so a service on the host network joins
+# on the default route - not on the bridge - and never hears these nodes. The
+# host needs a route sending the multicast range at the bridge:
+#
+#   sudo ip route add 239.192.0.0/16 dev mpmtbr
+#
+# It does not survive a reboot, and it is ignored while the bridge is down,
+# which it is whenever no container is attached. The network below therefore
+# fixes both the bridge interface name and the subnet, so that one route keeps
+# working even if the network is recreated.
+#
+# Usage:
+#   scripts/make-node-configs.sh 2
+#   docker compose -f compose-nodes.yml up -d
+#
+# The RBU, WebServer and middleman stay where they are, on the host network.
+
+x-node-env: &node-env
+  PYTHONUNBUFFERED: "1"
+
+services:
+
+  ############################ MPMT001 ############################
+
+  mpmt001-feb:
+    image: mpmt-sim:local
+    command: ["python", "-m", "mpmt_sim.feb_sim"]
+    environment: *node-env
+    volumes:
+      - .:/opt/mpmt-sim:ro
+      - ../mpmt-mss:/opt/mpmt-mss:ro
+    networks: [mpmt-net]
+
+  mpmt001-mss:
+    image: mpmt-sim:local
+    depends_on: [mpmt001-feb]
+    environment:
+      <<: *node-env
+      MPMT_SIM_FEB_HOST: mpmt001-feb
+      MPMT_SIM_UIO: /dev/uio0
+      MPMT_SIM_PORT: "8000"
+    volumes:
+      - .:/opt/mpmt-sim:ro
+      - ../mpmt-mss:/opt/mpmt-mss:ro
+    networks: [mpmt-net]
+
+  mpmt001:
+    image: mpmt-node:local
+    depends_on: [mpmt001-mss]
+    # Writable, unlike the mss mounts: DAQInterface saves its generated UUID
+    # here on first run, and each node must keep its own.
+    volumes:
+      - ./nodes/MPMT001:/opt/node
+    networks: [mpmt-net]
+
+  ############################ MPMT002 ############################
+
+  mpmt002-feb:
+    image: mpmt-sim:local
+    command: ["python", "-m", "mpmt_sim.feb_sim"]
+    environment: *node-env
+    volumes:
+      - .:/opt/mpmt-sim:ro
+      - ../mpmt-mss:/opt/mpmt-mss:ro
+    networks: [mpmt-net]
+
+  mpmt002-mss:
+    image: mpmt-sim:local
+    depends_on: [mpmt002-feb]
+    environment:
+      <<: *node-env
+      MPMT_SIM_FEB_HOST: mpmt002-feb
+      MPMT_SIM_UIO: /dev/uio0
+      MPMT_SIM_PORT: "8000"
+    volumes:
+      - .:/opt/mpmt-sim:ro
+      - ../mpmt-mss:/opt/mpmt-mss:ro
+    networks: [mpmt-net]
+
+  mpmt002:
+    image: mpmt-node:local
+    depends_on: [mpmt002-mss]
+    volumes:
+      - ./nodes/MPMT002:/opt/node
+    networks: [mpmt-net]
+
+networks:
+  mpmt-net:
+    external: true
