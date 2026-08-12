@@ -179,6 +179,37 @@ pmt2_voltage_set 1350  =>  V=1040 RUP -> V=1200 RUP -> V=1350 UP
 That is what makes per-object monitoring and control pages possible without
 hardware.
 
+### It joins the run lifecycle
+
+Run control in ToolDAQ is **broadcast**, not addressed node by node: the
+WebServer's run page sends alerts and whoever subscribed reacts. A node that
+does not subscribe simply never starts or stops with the run.
+
+Of the four alerts a run start sends, the framework handles two on its own:
+
+| Alert | Handled by |
+|---|---|
+| `CacheConfig` | the middleman |
+| `LoadConfig` | the framework — fetches this device's resolved config into `m_local_config`, sets `NewConfig` |
+| `ChangeConfig` | the framework, calling the `SetChangeConfigFunc` callback, and driving `Config` through `ChangeStart` → `ChangeEnd`/`ChangeFail` |
+| `RunStart` | **nobody** — no hook exists, so it is subscribed by hand |
+
+`sim-producer` therefore subscribes to `RunStart` directly and registers
+`SetRunStopFunc`, which also clears the cached base/runmode config ids so the
+next `ChangeConfig` re-runs rather than being skipped as a no-op.
+
+Verified both ways round — the run alerts and the manual buttons drive the
+same state, so they cannot disagree:
+
+```
+sendalert RunStart  =>  MPMT001,Running   and blocks start flowing
+sendalert RunStop   =>  MPMT001,Stopped   and they stop
+```
+
+**`producer.cpp` does not do this yet.** It sets `SetChangeConfigFunc` and
+nothing else, so a real mPMT reacts to a configuration change but ignores run
+start and stop. That is the piece to port back.
+
 ## Running the RBU
 
 `docker/Dockerfile.rbu` builds `readouttesting` from the local checkout — its

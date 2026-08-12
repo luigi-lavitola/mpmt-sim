@@ -45,7 +45,11 @@ constexpr size_t kBlockBytes = kBlockWords * sizeof(uint32_t);
 constexpr int kSendPeriodMs = 100;
 
 std::atomic<bool> keep_running{true};
-std::string run_state = "stopped";
+
+// Written from three places - the Start/Stop button thread, the RunStart and
+// RunStop alert callbacks (which run on the framework's own thread), and read
+// by the send loop - so it has to be atomic.
+std::atomic<bool> taking_data{false};
 
 DAQInterface* daq_inter = nullptr;
 
@@ -90,23 +94,26 @@ uint32_t UnixMillis() {
   return static_cast<uint32_t>(ms.count() & 0xFFFFFFFF);
 }
 
+// One place that flips data taking and publishes the matching Status, so the
+// buttons and the run alerts cannot disagree about what the node is doing.
+void SetTakingData(bool on, const char* status) {
+  const bool was = taking_data.exchange(on);
+  if (was == on) return;
+  daq_inter->sc_vars["Status"]->SetValue(status);
+  std::cout << "run state -> " << status << std::endl;
+}
+
 // Polls the Start/Stop buttons, mirroring producer.cpp's control thread.
 void Control() {
   while (keep_running) {
     if (daq_inter->sc_vars["Start"]->GetValue<bool>()) {
       daq_inter->sc_vars["Start"]->SetValue(false);
-      if (run_state != "running") {
-        run_state = "running";
-        daq_inter->sc_vars["Status"]->SetValue("Running");
-      }
+      SetTakingData(true, "Running");
     }
 
     if (daq_inter->sc_vars["Stop"]->GetValue<bool>()) {
       daq_inter->sc_vars["Stop"]->SetValue(false);
-      if (run_state != "stopped") {
-        run_state = "stopped";
-        daq_inter->sc_vars["Status"]->SetValue("Stopped");
-      }
+      SetTakingData(false, "Stopped");
     }
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -216,12 +223,34 @@ int main(int argc, char** argv) {
     daq_inter->sc_vars.Add("Stop", BUTTON);
     daq_inter->sc_vars["Stop"]->SetValue(false);
 
+    // Join the ToolDAQ run lifecycle, not just the manual buttons. The
+    // WebServer's run page broadcasts alerts rather than addressing nodes
+    // one by one, so a node that does not subscribe simply never starts or
+    // stops with the run - which is where producer.cpp stands today.
+    //
+    // Of the four alerts a run start sends, the framework already handles
+    // two: LoadConfig fetches this device's resolved configuration into
+    // m_local_config by itself, and ChangeConfig calls the callback set
+    // through SetChangeConfigFunc above. RunStop only needs the hook below.
+    // RunStart has no hook at all, so it is subscribed by hand.
+    daq_inter->AlertSubscribe("RunStart", [](const char*, const char*) -> bool {
+      SetTakingData(true, "Running");
+      return true;
+    });
+
+    // SetRunStopFunc also clears the cached base/runmode config ids, so the
+    // next ChangeConfig re-runs the callback instead of being skipped as a
+    // no-op - which is what lets a node be reconfigured between runs.
+    daq_inter->SetRunStopFunc([]() -> bool {
+      SetTakingData(false, "Stopped");
+      return true;
+    });
+
     daq_inter->sc_vars["Status"]->SetValue("Ready");
 
     control_thread = std::thread(Control);
   } else {
-    run_state = "running";
-    daq_inter->sc_vars["Status"]->SetValue("Running");
+    SetTakingData(true, "Running");
   }
 
   std::cout << "sim-producer up: " << daq_inter->GetDeviceName()
@@ -231,7 +260,7 @@ int main(int argc, char** argv) {
   uint64_t sent = 0;
 
   while (keep_running) {
-    if (run_state != "running") {
+    if (!taking_data) {
       std::this_thread::sleep_for(std::chrono::milliseconds(50));
       continue;
     }
