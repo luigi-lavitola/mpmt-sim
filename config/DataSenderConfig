@@ -1,0 +1,24 @@
+########################## DataSender ################################
+data_port 8888			      # local port DataSender BINDs to - the RBU connects in to this port
+retry_limit 50			      # how many times to retry sending a message
+resend_period_ms 100		      # length of time between retries
+poll_period_ms 100		      # length of time to poll receive socket when no messages to send
+card_type 2    			      # card type [2bits]: ID board (00) ID/OD board (01), MPMT (10), calibration (11) - mPMT = 2
+card_id 2000			      # card id [12 bits]: unique id of this electronics board - override per deployed unit
+
+cache_file /var/tmp/mpmt-sim.datacache   # disk overflow cache for the simulator
+                                                     # here instead of being dropped, and recovered once the link recovers.
+                                                     # remove/empty this key to restore the original drop+log behaviour.
+cache_recover_per_cycle 1                           # how many cached messages to try resending per idle cycle
+
+ZMQ_RCVHWM 1000		   	      # receive highj watermark
+ZMQ_SNDHWM 1			      # send high water mark
+ZMQ_LINGER 0			      # socket lingering after connection closed
+ZMQ_BACKLOG 1000		      # maximum ammount of connections to store to try and reconnect to
+ZMQ_RCVTIMEO 0			      # time to wait when receiving a message
+ZMQ_SNDTIMEO 1			      # time to wait on sending a message
+ZMQ_IMMEDIATE 1			      # whether to queue messages only to completed connections
+ZMQ_TCP_KEEPALIVE 1		      #	Override OS KEEPALIVE socket options
+ZMQ_TCP_KEEPALIVE_IDLE 5	      #	Override OS KEEPALIVE socket options
+ZMQ_TCP_KEEPALIVE_CNT 12	      # Override OS KEEPALIVE socket options
+ZMQ_TCP_KEEPALIVE_INTVL 5	      # Override OS KEEPALIVE socket options

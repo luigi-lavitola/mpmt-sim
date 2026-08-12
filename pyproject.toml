@@ -1,0 +1,27 @@
+[project]
+name = "mpmt-sim"
+version = "0.1.0"
+description = "Simulated mPMT hardware for mpmt-mss and mpmt-daq-interface"
+requires-python = ">=3.11"
+
+# mpmt-mss is deliberately not listed here. It is a sibling checkout, not a
+# published package, and pinning a path dependency would break as soon as
+# anyone lays the repos out differently. The Docker image installs it from
+# ../mpmt-mss; for local runs put it on PYTHONPATH.
+dependencies = [
+    "fastapi>=0.137.1",
+    "pydantic>=2.13.4",
+    "pymodbus==3.9.2",
+    "uvicorn>=0.49.0",
+]
+
+[project.scripts]
+mpmt-sim-mss = "mpmt_sim.main:start"
+mpmt-sim-feb = "mpmt_sim.feb_sim:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mpmt_sim"]

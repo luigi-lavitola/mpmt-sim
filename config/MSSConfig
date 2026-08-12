@@ -1,0 +1,10 @@
+# Points the simulated node at the simulated mss service.
+#
+# mpmt-daq-interface ships the same file with localhost:8000, which is right
+# when mss runs on the mPMT itself. Here mss-sim publishes port 8000 on the
+# host (see compose.yml), so the default value works unchanged as long as
+# sim-producer runs on the same machine as the compose stack.
+
+mss_url http://localhost:8000/rpc   # base URL of the mss JSON-RPC service for this mPMT module
+mss_timeout_sec 5                   # HTTP timeout for mss calls
+monitor_period_sec 10               # how often to poll mss and send a monitoring snapshot

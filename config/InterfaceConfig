@@ -1,0 +1,56 @@
+############################ DAQ Interface ############################
+# Copied in shape from mpmt-daq-interface/config/InterfaceConfig. Two
+# deliberate differences: no fixed UUID, and a device_name following the
+# MPMTnnn convention.
+#
+# The capitals matter: readouttesting's MPMTReceive finds senders with
+# Update("MPMT", data_port), and DAQUtilities::UpdateConnections compares
+# that prefix against device_name case-sensitively. Named "mPMT001" this
+# node is invisible to the RBU — it never connects, with no error either
+# side. Same rule the DPB boards follow with DPB001 and Update("DPB").
+
+# No UUID key on purpose: DAQInterface generates one on first run and saves
+# it at UUID_path. A hardcoded UUID would make every simulated node present
+# itself to ServiceDiscovery as the same client.
+UUID_path ./UUID
+
+device_name MPMT001                         # override per simulated unit
+
+services_backend_verbosity 1                # verbosity level of backend MM communication
+clt_pub_port 5556                           # local port used for DB writes
+clt_dlr_port 5555                           # local port used for DB reads
+clt_pub_socket_timeout 500                  # send timeout on port used for DB writes
+clt_dlr_socket_timeout 500                  # send timeout on port used for DB reads
+inpoll_timeout 50                           # keep short!
+command_timeout 1000                        # blocking time to wait for MM reply before giving up
+
+log_port 5000                               # remote port to send logging messages to
+mon_port 5000                               # remote port to send monitoring messages to
+log_address 239.192.1.2                     # multicast address to send logging messages to
+mon_address 239.192.1.3                     # multicast address to send monitoring messages to
+
+alerts_send 1                               # enable ability to send global alerts
+alert_send_port 12244                       # local port to use for sending global alerts
+alerts_receive 1                            # enable ability to receive global alerts
+alert_receive_port 12245                    # local port to use for receiving global alerts
+
+sc_port 6001                                # local port to use for slow control
+remote_port 7777                            # local port to use for remote commands
+
+# Service discovery. Every local port above is per-process: running several
+# simulated nodes on one host means giving each its own set. On real
+# hardware this never comes up, since each mPMT is its own machine.
+# NOTE: these two keys are named service_discovery_* on purpose.
+# mpmt-daq-interface/config/InterfaceConfig spells them sd_address / sd_port,
+# but neither its own src/DAQInterface.cpp nor the upstream libDAQInterface
+# ever reads those names — both look for service_discovery_address and
+# service_discovery_port. With the sd_* spelling the address comes back
+# empty, inet_addr() rejects it and startup dies with
+# "setsockopt mreq: Invalid argument". Worth fixing upstream.
+service_discovery_address 239.192.1.1       # multicast address used for Service Discovery
+service_discovery_port 5000                 # port used for Service Discovery
+service_publish_sec 5                       # heartbeat send period
+service_kick_sec 60                         # remove hosts with no heartbeat after this
+multicast_send_period_ms 5000               # batch send multicast messages with this period
+mon_merge_period_ms 5000                    # only send the first monitoring message with a given device and subject once per this period
+alarm_cooldown_ms 1000                      # only send the first alarm with a given device and message once per this period

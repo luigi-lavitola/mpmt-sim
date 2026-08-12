@@ -1,0 +1,41 @@
+# One simulated mPMT: the FEB Modbus server and the mss service that talks
+# to it. Both mount the real repos rather than baking them in.
+#
+# The two are on a private bridge network so the FEB server can keep Modbus
+# on its standard port 502 — ModbusManager hardcodes that port, so it cannot
+# be moved, and on a shared host network it would collide with anything else
+# using it.
+
+services:
+
+  feb-sim:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: mpmt-sim:local
+    command: ["python", "-m", "mpmt_sim.feb_sim"]
+    volumes:
+      - .:/opt/mpmt-sim:ro
+      - ../mpmt-mss:/opt/mpmt-mss:ro
+    networks: [mpmt]
+
+  mss-sim:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: mpmt-sim:local
+    depends_on: [feb-sim]
+    environment:
+      MPMT_SIM_FEB_HOST: feb-sim
+      MPMT_SIM_UIO: /dev/uio0
+      MPMT_SIM_PORT: "8000"
+    volumes:
+      - .:/opt/mpmt-sim:ro
+      - ../mpmt-mss:/opt/mpmt-mss:ro
+    ports:
+      - "8000:8000"
+    networks: [mpmt]
+
+networks:
+  mpmt:
+    driver: bridge
