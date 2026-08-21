@@ -205,7 +205,9 @@ def main():
              args.host, args.port, len(PMT_SLAVES), len(LED_SLAVES))
 
     try:
-        StartTcpServer(context=context, address=(args.host, args.port))
+        # mss's *Forced/*All methods and alignModbusAddresses write to slave=0
+        # expecting a broadcast; without this flag those writes are dropped.
+        StartTcpServer(context=context, address=(args.host, args.port), broadcast_enable=True)
     finally:
         stop_event.set()
 

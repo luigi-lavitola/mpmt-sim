@@ -72,6 +72,17 @@ void MssMonitor() {
       try {
         std::string snapshot = BuildMssMonitoringSnapshot(*mss_client, mss_status_cache);
         daq_inter->SendMonitoringData(snapshot, "mss");
+        // Reads status_cache, which the call just above refreshed - no
+        // extra mss round trip. See MSSIntegration.h's own comment.
+        // Disabled 2026-08-16: still in test, and it fires a real but
+        // harmless alarm on every run start (a channel or two often isn't
+        // in the status cache yet a few seconds after ChangeConfig -
+        // confirmed transient on run 24, both channels read UP again
+        // within minutes). Re-enable once that race is handled (e.g. a
+        // short grace period after ChangeConfig) instead of just
+        // silencing the symptom. Mirrors main.cpp's own copy of this call
+        // in m-pmt-daq-interface.
+        // CheckChannelHealth(*mss_client, *daq_inter, mss_status_cache);
       } catch (const std::exception& e) {
         daq_inter->SendLog(std::string("mss: monitoring cycle failed: ") + e.what(),
                            LogLevel::Warning);
@@ -201,6 +212,22 @@ int main(int argc, char** argv) {
       }
     });
 
+    // The read-back counterpart to ChangeConfig - builds fresh from mss's
+    // live state (see MSSIntegration.h's BuildMssConfigSnapshot) rather
+    // than caching whatever was last applied. Registers as both an
+    // "ExportConfig" alert subscription and an "ExportConfig" BUTTON slow
+    // control (DAQInterface's own Services::SetExportConfigFunc does both).
+    daq_inter->SetExportConfigFunc([](std::string& json) -> bool {
+      try {
+        json = BuildMssConfigSnapshot(*mss_client);
+        return true;
+      } catch (const std::exception& e) {
+        daq_inter->SendLog(std::string("mss: config export failed: ") + e.what(),
+                           LogLevel::Error);
+        return false;
+      }
+    });
+
     // Exposes each mss PMT/LED/fpga parameter as its own DAQInterface slow
     // control variable, so the WebServer control UI (which only understands
     // DAQInterface slow control, not mss's own JSON-RPC) can drive them.
@@ -243,7 +270,20 @@ int main(int argc, char** argv) {
     // no-op - which is what lets a node be reconfigured between runs.
     daq_inter->SetRunStopFunc([]() -> bool {
       SetTakingData(false, "Stopped");
-      return true;
+
+      // Matches ElectronicsTemplate's own Functions::RunStop (and
+      // m-pmt-daq-interface/src/Functions.cpp) - an alarm, not just a log,
+      // since a stop that did not really stop belongs on the Alarms page.
+      // Presently unreachable for the same reason as there: nothing here
+      // yet detects a failed stop.
+      bool success = true;
+      if (!success) {
+        daq_inter->SetError(true);
+        daq_inter->sc_vars["Status"]->SetValue("RunStop Error");
+        daq_inter->SendLog("Failed to stop acquisition", LogLevel::Error);
+        daq_inter->SendAlarm("Failed to stop acquisition");
+      }
+      return success;
     });
 
     daq_inter->sc_vars["Status"]->SetValue("Ready");

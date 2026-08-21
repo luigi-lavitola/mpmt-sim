@@ -83,6 +83,16 @@ services:
       MPMT_SIM_FEB_HOST: mpmt002-feb
       MPMT_SIM_UIO: /dev/uio0
       MPMT_SIM_PORT: "8000"
+      # Back to the default all-PMT mask (0x7FFFF) for now - MPMT002 was
+      # 14 PMT + 5 LED (channels 15-19) to test that split, but LED writes
+      # (setLEDBiasVoltage/setLEDChannels) hit REG_LED_BASE+channel, which
+      # collides with REG_PMT_MASK (channel 18) and REG_FW_VERSION (channel
+      # 19) - confirmed live 2026-08-14, REG_PMT_MASK was found corrupted
+      # from 0x3fff to 0xfff. Real mss register-map bug (ledchannel.py,
+      # REG_LED_BASE=85), not simulator-specific - Gennaro is checking
+      # against the real firmware whether the offset is genuinely wrong or
+      # just documented wrong. Revert to "0x3FFF" (see git history) once
+      # that's resolved.
     volumes:
       - .:/opt/mpmt-sim:ro
       - ../mpmt-mss:/opt/mpmt-mss:ro

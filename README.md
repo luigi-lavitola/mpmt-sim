@@ -90,6 +90,27 @@ docker exec WebServer cat /tmp/table_file | grep MPMT
 > **Do not leave a node streaming with no RBU attached** — see *DataSender disk
 > cache* under Notes for upstream. It will fill the disk.
 
+> **`MPMT_SIM_PMT_MASK` only takes effect at container start.** `main.py`
+> writes it to the fake register file before constructing `FEBManager`
+> (`fake_uio.create`), and `FEBManager.__init__` reads register 103 exactly
+> once — the same as real firmware deciding it once at boot. Changing the
+> variable on a running container does nothing; recreate the node's `-mss`
+> container (`docker compose up -d --force-recreate <node>-mss`) and restart
+> its producer too, since it registers its slow-control variables once
+> against whatever mss it finds at its own start-up
+> (`docker compose restart <node>`).
+>
+> To model one of the ~200/808 real mPMTs where 5 channels are LED
+> calibration boards instead of PMTs (say, channels 15-19), clear their bits
+> in the mask: `0x7FFFF & ~(0x1F << 14)` = `0x3FFF`. For `compose-nodes.yml`,
+> set it on that node's `-mss` service, e.g.:
+> ```yaml
+>   mpmt002-mss:
+>     environment:
+>       <<: *node-env
+>       MPMT_SIM_PMT_MASK: "0x3FFF"
+> ```
+
 ## What it simulates
 
 | Seam | Real hardware | Here |

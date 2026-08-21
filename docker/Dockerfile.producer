@@ -1,5 +1,6 @@
 # The simulated mPMT node itself - sim-producer and everything it compiles in
-# from mpmt-daq-interface.
+# from m-pmt-daq-interface (built on the DAQ group's ElectronicsTemplate -
+# see that repo's docs/migration-from-mpmt-daq-interface.md).
 #
 # Unlike docker/Dockerfile, which only runs Python and mounts the sources,
 # this one has to build: sim-producer is C++ and links the production data
@@ -25,7 +26,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY mpmt-sim            /opt/mpmt-sim
-COPY mpmt-daq-interface  /opt/mpmt-daq-interface
+COPY m-pmt-daq-interface  /opt/m-pmt-daq-interface
 COPY libToolDAQ          /opt/libToolDAQ
 COPY mpmt-mss            /opt/mpmt-mss
 
@@ -35,7 +36,7 @@ RUN rm -rf /opt/mpmt-sim/build
 
 RUN cmake -S /opt/mpmt-sim -B /opt/mpmt-sim/build \
       -DCMAKE_BUILD_TYPE=Release \
-      -DMPMT_DAQ_INTERFACE_DIR=/opt/mpmt-daq-interface \
+      -DMPMT_DAQ_INTERFACE_DIR=/opt/m-pmt-daq-interface \
       -DTOOLDAQ_DIR=/opt/libToolDAQ \
       -DMPMT_MSS_CPP_DIR=/opt/mpmt-mss/src/mpmt_mss/client/cpp \
     && cmake --build /opt/mpmt-sim/build --target sim-producer -j$(nproc)
